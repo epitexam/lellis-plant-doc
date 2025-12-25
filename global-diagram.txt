@@ -1,0 +1,103 @@
+@startuml
+left to right direction
+skinparam packageStyle rectangle
+skinparam actorStyle awesome
+
+' =========================
+' ACTORS
+' =========================
+
+actor "User" as User
+actor "Global Administrator" as GlobalAdmin
+actor "System Technician" as Tech
+
+actor "Network Member" as NetMember
+actor "Network Administrator" as NetAdmin
+
+User <|-- GlobalAdmin
+User <|-- Tech
+NetMember <|-- NetAdmin
+
+' =========================
+' SYSTEM BOUNDARY
+' =========================
+
+package "Healthcare SaaS Platform" {
+
+    ' -------- GLOBAL SCOPE --------
+    package "1. Global Scope (Instance Level)" {
+
+        usecase "Authenticate\n(Register / Login)" as UC_Login
+        usecase "Manage User Profile" as UC_Profile
+        usecase "Create or Join a Network" as UC_NetworkJoin
+
+        usecase "Manage Global Authorization Model" as UC_GlobalAuth
+        usecase "Manage All Networks" as UC_AllNetworks
+        usecase "View Global Audit Logs" as UC_GlobalAudit
+
+        usecase "Monitor System Health" as UC_Monitor
+        usecase "Perform System Maintenance" as UC_Maintenance
+    }
+
+    ' -------- NETWORK SCOPE --------
+    package "2. Network Scope (Medical Workspace)" {
+
+        note top
+          Access control is enforced using:
+          - Network roles (RBAC)
+          - Contextual policies (ABAC)
+          e.g. assignment, time, patient context
+        end note
+
+        usecase "Manage Network Members\n(Invite / Revoke)" as UC_Members
+        usecase "Manage Network Authorization Model" as UC_NetAuth
+        usecase "Configure Network Settings" as UC_NetConfig
+
+        usecase "Manage Patient Records" as UC_Patients
+        usecase "Monitor Vital Signs" as UC_Vitals
+        usecase "Manage Prescriptions\n& Care Series" as UC_Care
+        usecase "Manage Rounds\n& Planning" as UC_Rounds
+        usecase "Perform Visits\n& Validate Acts" as UC_Visits
+        usecase "Manage Medical Documents" as UC_Docs
+        usecase "Internal Team Communication" as UC_Chat
+        usecase "Manage Billing & Insurance" as UC_Billing
+    }
+}
+
+' =========================
+' RELATIONSHIPS
+' =========================
+
+User --> UC_Login
+User --> UC_Profile
+User --> UC_NetworkJoin
+
+GlobalAdmin --> UC_GlobalAuth
+GlobalAdmin --> UC_AllNetworks
+GlobalAdmin --> UC_GlobalAudit
+
+Tech --> UC_Monitor
+Tech --> UC_Maintenance
+
+User ..> NetMember : Acts as\n(via NetworkMember context)
+
+NetAdmin --> UC_Members
+NetAdmin --> UC_NetAuth
+NetAdmin --> UC_NetConfig
+
+NetMember --> UC_Patients
+NetMember --> UC_Vitals
+NetMember --> UC_Care
+NetMember --> UC_Rounds
+NetMember --> UC_Visits
+NetMember --> UC_Docs
+NetMember --> UC_Chat
+NetMember --> UC_Billing
+
+' -------- DEPENDENCIES --------
+UC_Visits ..> UC_Patients : <<include>>
+UC_Rounds ..> UC_Visits : <<include>>
+UC_Care ..> UC_Patients : <<include>>
+UC_Billing ..> UC_Visits : <<extend>>
+
+@enduml

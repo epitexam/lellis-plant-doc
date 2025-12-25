@@ -1,0 +1,265 @@
+@startuml
+' =========================
+' GLOBAL CONFIG
+' =========================
+skinparam classAttributeIconSize 0
+skinparam linetype ortho
+skinparam nodesep 60
+skinparam ranksep 60
+
+' =========================
+' SECURITY CORE (RBAC + ABAC)
+' =========================
+package "Security Core" {
+
+    enum PermissionEffect {
+        ALLOW
+        DENY
+    }
+
+    class Permission {
+        +id: UUID
+        +code: String <<PATIENT_READ, VISIT_WRITE>>
+        +description: String
+    }
+
+    abstract class Role {
+        +id: UUID
+        +name: String
+        +description: String
+        +isSystemProtected: Boolean
+    }
+
+    class RolePermission {
+        +effect: PermissionEffect
+    }
+
+    Role "1" -- "0..*" RolePermission : aggregates >
+    Permission "1" -- "0..*" RolePermission
+
+    ' ---------- ABAC ----------
+
+    class Policy {
+        +id: UUID
+        +name: String
+        +description: String
+        +expression: String <<OPA / CEL / DSL>>
+        +effect: PermissionEffect
+    }
+
+    class ResourceRef {
+        +id: UUID
+        +resourceType: String <<Patient, Visit, Document>>
+    }
+
+    Policy "0..*" --> "1" Permission : governs >
+    Policy "0..*" --> "0..1" ResourceRef : targets >
+}
+
+' =========================
+' GLOBAL SCOPE (IDENTITY)
+' =========================
+package "1. Global Scope (Identity)" #EEE {
+
+    class User {
+        +id: UUID
+        +email: String
+        +passwordHash: String
+        +firstName: String
+        +lastName: String
+        +mfaEnabled: Boolean
+    }
+
+    class GlobalRole
+    Role <|-- GlobalRole
+
+    class Session {
+        +id: UUID
+        +tokenValue: String
+        +deviceInfo: String
+        +expiresAt: DateTime
+    }
+
+    User "1" -- "0..*" GlobalRole : assigned >
+    User "1" *-- "0..*" Session : owns >
+}
+
+' =========================
+' NETWORK SCOPE (WORKSPACE)
+' =========================
+package "2. Network Scope (Workspace)" #E6F3FF {
+
+    class Network {
+        +id: UUID
+        +name: String
+        +domainSlug: String
+        +createdAt: DateTime
+    }
+
+    class NetworkMember {
+        +id: UUID
+        +joinedAt: Date
+        +status: MemberStatus
+        +inviteToken: String
+    }
+
+    class NetworkRole {
+        +color: String
+        +isDefault: Boolean
+    }
+
+    Role <|-- NetworkRole
+
+    Network "1" *-- "0..*" NetworkMember : contains >
+    User "1" -- "0..*" NetworkMember : acts as >
+
+    Network "1" *-- "0..*" NetworkRole : defines >
+    NetworkMember "1" -- "0..*" NetworkRole : assigned >
+}
+
+' =========================
+' SYSTEM & AUDITING
+' =========================
+package "3. System and Auditing" #D4F0D4 {
+
+    class AuditLog {
+        +id: UUID
+        +timestamp: DateTime
+        +action: String
+        +entityType: String
+        +entityId: UUID
+        +details: Json
+    }
+
+    class Notification {
+        +id: UUID
+        +title: String
+        +message: String
+        +isRead: Boolean
+    }
+
+    User "1" *-- "0..*" Notification : receives >
+    AuditLog "0..*" --> "0..1" User : performed by >
+    AuditLog "0..*" --> "0..1" NetworkMember : performed by (context) >
+}
+
+' =========================
+' BILLING & SUBSCRIPTION
+' =========================
+package "4. Billing & Subscription" #FFFACD {
+
+    class Subscription {
+        +id: UUID
+        +planName: String
+        +startDate: Date
+        +endDate: Date
+        +status: SubStatus
+    }
+
+    class Invoice {
+        +id: UUID
+        +amount: Decimal
+        +issueDate: Date
+        +paymentStatus: PaymentStatus
+    }
+
+    class PaymentMethod {
+        +id: UUID
+        +provider: String
+        +lastFourDigits: String
+    }
+
+    Network "1" *-- "1" Subscription
+    Subscription "1" *-- "0..*" Invoice
+    User "1" -- "0..*" PaymentMethod
+    Subscription "1" --> "1" PaymentMethod
+}
+
+' =========================
+' MEDICAL DOMAIN (BUSINESS)
+' =========================
+package "5. Medical Domain" #F0FFF0 {
+
+    class Patient {
+        +id: UUID
+        +nir: String
+        +birthDate: Date
+    }
+
+    class HealthRecord {
+        +id: UUID
+        +allergies: List<String>
+    }
+
+    class InsuranceCoverage {
+        +id: UUID
+        +type: String
+        +insurerName: String
+    }
+
+    class VitalSign {
+        +id: UUID
+        +type: SignType
+        +value: Float
+    }
+
+    class Visit {
+        +id: UUID
+        +scheduledTime: DateTime
+        +status: VisitStatus
+    }
+
+    class Round {
+        +id: UUID
+        +date: Date
+        +status: RoundStatus
+    }
+
+    class Prescription {
+        +id: UUID
+        +startDate: Date
+    }
+
+    class CareSeries {
+        +id: UUID
+        +totalSessions: Integer
+    }
+
+    class MedicalAct {
+        +id: UUID
+        +code: String
+        +price: Decimal
+    }
+
+    class Document {
+        +id: UUID
+        +type: DocType
+    }
+
+    class Transmission {
+        +id: UUID
+        +content: Text
+    }
+
+    ' ---- RELATIONS ----
+
+    Network "1" *-- "0..*" Patient : owns >
+    Patient "1" *-- "1" HealthRecord
+    Patient "1" *-- "0..*" InsuranceCoverage
+    Patient "1" *-- "0..*" VitalSign
+
+    Prescription "1" *-- "0..*" CareSeries
+    CareSeries "1" *-- "0..*" Visit
+
+    Network "1" *-- "0..*" Round
+    Round "0..*" --> "0..1" NetworkMember : assigned to >
+    Round "1" *-- "0..*" Visit
+
+    Visit "0..*" --> "1" Patient
+    Visit "1" o-- "0..*" MedicalAct
+
+    Patient "1" *-- "0..*" Document
+    Transmission "0..*" --> "1" NetworkMember : written by >
+}
+
+@enduml

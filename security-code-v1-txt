@@ -1,0 +1,128 @@
+@startuml
+' =========================
+' GLOBAL CONFIG
+' =========================
+skinparam classAttributeIconSize 0
+skinparam linetype ortho
+skinparam nodesep 60
+skinparam ranksep 60
+skinparam packageStyle frame
+
+' =========================
+' SECURITY CORE (RBAC)
+' =========================
+package "Security Core" #F9F9F9 {
+
+    abstract class Role {
+        +id: UUID
+        +name: String
+        +description: String
+        +isSystemProtected: Boolean
+        --
+        +can(permissionCode: PermissionCode): Boolean
+    }
+
+    class Permission {
+        +id: UUID
+        +code: PermissionCode <<ValueObject>>
+        +label: String
+        +category: String
+    }
+
+    class RolePermission {
+        +grantedAt: DateTime
+    }
+
+    Role "1" *-- "0..*" RolePermission : aggregates >
+    Permission "1" -- "0..*" RolePermission
+}
+
+' =========================
+' 1. IDENTITY MANAGEMENT
+' =========================
+package "1. Identity Management" #EEE {
+
+    class User {
+        +id: UUID
+        +email: String
+        +passwordHash: String
+        +firstName: String
+        +lastName: String
+        --
+        +hasGlobalAccess(code: PermissionCode): Boolean
+    }
+
+    class GlobalRole
+    Role <|-- GlobalRole
+
+    class Session {
+        +id: UUID
+        +token: String
+        +deviceInfo: String
+        +expiresAt: DateTime
+    }
+
+    User "1" o-- "0..*" GlobalRole : assigned >
+    User "1" *-- "0..*" Session : owns >
+}
+
+' =========================
+' 2. WORKSPACE MANAGEMENT
+' =========================
+package "2. Workspace Management" #E6F3FF {
+
+    class Workspace {
+        +id: UUID
+        +name: String
+        +slug: String
+        +createdAt: DateTime
+    }
+
+    class WorkspaceMember {
+        +id: UUID
+        +joinedAt: Date
+        +status: MemberStatus
+        --
+        +hasAccess(code: PermissionCode): Boolean
+    }
+
+    class WorkspaceRole {
+        +color: String
+        +isDefault: Boolean
+    }
+
+    Role <|-- WorkspaceRole
+
+    Workspace "1" *-- "0..*" WorkspaceMember : contains >
+    Workspace "1" *-- "0..*" WorkspaceRole : defines >
+
+    User "1" -- "0..*" WorkspaceMember : acts as >
+    WorkspaceMember "1" o-- "0..*" WorkspaceRole : assigned >
+}
+
+' =========================
+' 3. AUDIT & NOTIFICATION
+' =========================
+package "3. Audit & Notification" #D4F0D4 {
+
+    class AuditLog {
+        +id: UUID
+        +timestamp: DateTime
+        +action: String
+        +entityType: String
+        +entityId: UUID
+        +details: Json
+    }
+
+    class Notification {
+        +id: UUID
+        +title: String
+        +message: String
+        +isRead: Boolean
+    }
+
+    User "1" *-- "0..*" Notification : receives >
+    AuditLog "0..*" --> "0..1" User : performed by >
+    AuditLog "0..*" --> "0..1" WorkspaceMember : performed by (context) >
+}
+@enduml

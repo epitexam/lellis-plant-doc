@@ -1,0 +1,133 @@
+@startuml
+skinparam linetype ortho
+skinparam node {
+    BackgroundColor White
+    BorderColor Black
+}
+skinparam componentStyle uml2
+
+' =========================
+' CLIENT
+' =========================
+
+node "Client Workstation\n(Health Professional PC/Mac)" as ClientNode <<Device>> {
+    node "Operating System\n(Windows / macOS / Linux)" {
+        component [**Tauri Desktop Application**] as TauriApp <<Artifact>>
+        note right of TauriApp
+          - UI (React / Vue)
+          - Local encrypted storage (SQLite)
+          - Offline-first sync manager
+        end note
+    }
+}
+
+cloud "Internet" as Internet
+
+' =========================
+' SERVER INFRASTRUCTURE
+' =========================
+
+node "Production Infrastructure\n(VPS / Dedicated Server)" as ServerNode <<Server>> {
+
+    node "Docker Host" <<Execution Environment>> {
+
+        ' -------- DMZ --------
+        package "Public Network (DMZ)" {
+            component [**Reverse Proxy**\n(Nginx / Traefik)] as Proxy <<Container>>
+            note right of Proxy
+              - TLS termination
+              - Load balancing
+              - Security headers
+            end note
+        }
+
+        ' -------- PRIVATE NETWORK --------
+        package "Internal Network (Private)" {
+
+            ' Entry point
+            component [**API Gateway**\n(ElysiaJS)] as Gateway <<Container>>
+            note left of Gateway
+              Clean Architecture Entry Point
+              - Authentication (JWT validation)
+              - Authorization delegation
+              - Request routing & aggregation
+            end note
+
+            ' Microservices
+            frame "Microservices Cluster" {
+
+                component [**Identity & Authorization Service**] as SvcAuth <<Microservice>>
+                note right of SvcAuth
+                  - Identity management
+                  - RBAC (Roles / Permissions)
+                  - ABAC (Policy evaluation)
+                  - Network & membership context
+                  - Centralized security audit
+                end note
+
+                component [**Medical Core Service**] as SvcMed <<Microservice>>
+                note right of SvcMed
+                  - Patients
+                  - Visits & Rounds
+                  - Prescriptions & Acts
+                end note
+
+                component [**Document Service**] as SvcDoc <<Microservice>>
+                note right of SvcDoc
+                  - Medical documents
+                  - Secure upload / retrieval
+                end note
+            }
+
+            ' Infrastructure services
+            component [**Relational Database**\n(PostgreSQL)] as DBServer <<Container>>
+            note right of DBServer
+              Logical schema separation:
+              - identity_schema
+              - authorization_schema
+              - medical_schema
+            end note
+
+            component [**Object Storage**\n(MinIO / S3 Compatible)] as FileStore <<Container>>
+        }
+    }
+
+    ' -------- PERSISTENCE --------
+    folder "Persistent Volumes" as Volumes {
+        file "pg_data" as VolDB
+        file "object_storage" as VolDocs
+    }
+}
+
+' =========================
+' EXTERNAL SERVICES
+' =========================
+
+cloud "External Services" as External {
+    component [SMTP Provider] as SMTP
+    component [Health APIs\n(DMP / INS)] as MedAPI
+}
+
+' =========================
+' CONNECTIONS
+' =========================
+
+TauriApp --> Internet : HTTPS / WSS
+Internet --> Proxy : 443 / TLS
+Proxy --> Gateway : HTTP (internal network)
+
+Gateway --> SvcAuth : HTTP / gRPC
+Gateway --> SvcMed : HTTP / gRPC
+Gateway --> SvcDoc : HTTP / gRPC
+
+SvcAuth ..> DBServer : R/W (identity & auth)
+SvcMed ..> DBServer : R/W (medical)
+SvcDoc ..> FileStore : S3 API
+
+DBServer ..> VolDB
+FileStore ..> VolDocs
+
+Gateway ..> SMTP : Async notifications
+SvcMed ..> MedAPI : Secure outbound API
+
+@enduml
