@@ -85,36 +85,36 @@ package "1. Global Scope (Identity)" #EEE {
 }
 
 ' =========================
-' NETWORK SCOPE (WORKSPACE)
+' WORKSPACE SCOPE
 ' =========================
-package "2. Network Scope (Workspace)" #E6F3FF {
+package "2. Workspace Scope" #E6F3FF {
 
-    class Network {
+    class Workspace {
         +id: UUID
         +name: String
         +domainSlug: String
         +createdAt: DateTime
     }
 
-    class NetworkMember {
+    class WorkspaceMember {
         +id: UUID
         +joinedAt: Date
         +status: MemberStatus
         +inviteToken: String
     }
 
-    class NetworkRole {
+    class WorkspaceRole {
         +color: String
         +isDefault: Boolean
     }
 
-    Role <|-- NetworkRole
+    Role <|-- WorkspaceRole
 
-    Network "1" *-- "0..*" NetworkMember : contains >
-    User "1" -- "0..*" NetworkMember : acts as >
+    Workspace "1" *-- "0..*" WorkspaceMember : contains >
+    User "1" -- "0..*" WorkspaceMember : acts as >
 
-    Network "1" *-- "0..*" NetworkRole : defines >
-    NetworkMember "1" -- "0..*" NetworkRole : assigned >
+    Workspace "1" *-- "0..*" WorkspaceRole : defines >
+    WorkspaceMember "1" -- "0..*" WorkspaceRole : assigned >
 }
 
 ' =========================
@@ -140,7 +140,7 @@ package "3. System and Auditing" #D4F0D4 {
 
     User "1" *-- "0..*" Notification : receives >
     AuditLog "0..*" --> "0..1" User : performed by >
-    AuditLog "0..*" --> "0..1" NetworkMember : performed by (context) >
+    AuditLog "0..*" --> "0..1" WorkspaceMember : performed by (context) >
 }
 
 ' =========================
@@ -169,7 +169,7 @@ package "4. Billing & Subscription" #FFFACD {
         +lastFourDigits: String
     }
 
-    Network "1" *-- "1" Subscription
+    Workspace "1" *-- "1" Subscription
     Subscription "1" *-- "0..*" Invoice
     User "1" -- "0..*" PaymentMethod
     Subscription "1" --> "1" PaymentMethod
@@ -243,7 +243,7 @@ package "5. Medical Domain" #F0FFF0 {
 
     ' ---- RELATIONS ----
 
-    Network "1" *-- "0..*" Patient : owns >
+    Workspace "1" *-- "0..*" Patient : owns >
     Patient "1" *-- "1" HealthRecord
     Patient "1" *-- "0..*" InsuranceCoverage
     Patient "1" *-- "0..*" VitalSign
@@ -251,15 +251,14 @@ package "5. Medical Domain" #F0FFF0 {
     Prescription "1" *-- "0..*" CareSeries
     CareSeries "1" *-- "0..*" Visit
 
-    Network "1" *-- "0..*" Round
-    Round "0..*" --> "0..1" NetworkMember : assigned to >
+    Workspace "1" *-- "0..*" Round
+    Round "0..*" --> "0..1" WorkspaceMember : assigned to >
     Round "1" *-- "0..*" Visit
 
     Visit "0..*" --> "1" Patient
     Visit "1" o-- "0..*" MedicalAct
 
     Patient "1" *-- "0..*" Document
-    Transmission "0..*" --> "1" NetworkMember : written by >
+    Transmission "0..*" --> "1" WorkspaceMember : written by >
 }
-
 @enduml
