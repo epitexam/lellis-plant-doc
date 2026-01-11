@@ -119,9 +119,9 @@ cloud "External Services" as External {
 ' CONNECTIONS
 ' =========================
 
-Desktop --> Internet : HTTPS / WSS
-WebClient --> Internet : HTTPS / WSS
-MobileClient --> Internet : HTTPS / WSS
+Desktop --> Internet : HTTPS
+WebClient --> Internet : HTTPS
+MobileClient --> Internet : HTTPS
 Internet --> Proxy : 443 / TLS
 Proxy --> Backend : HTTP
 
