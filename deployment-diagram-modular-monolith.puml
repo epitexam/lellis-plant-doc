@@ -75,11 +75,11 @@ node "Self-Hosted Server\n(VPS / On-Premise)" as ServerNode <<Server>> {
             ' ----------------------------
             ' DATABASES (one per module)
             ' ----------------------------
-            database "Identity DB (PostgreSQL)" as DBIdentity <<Container>>
-            database "Workspace DB (PostgreSQL)" as DBWorkspace <<Container>>
-            database "Medical DB (PostgreSQL)" as DBMedical <<Container>>
-            database "Audit DB (PostgreSQL)" as DBAudit <<Container>>
-            database "Documents DB (PostgreSQL)" as DBDocuments <<Container>>
+            database "Identity DB " as DBIdentity <<Container>>
+            database "Workspace DB " as DBWorkspace <<Container>>
+            database "Medical DB " as DBMedical <<Container>>
+            database "Audit DB " as DBAudit <<Container>>
+            database "Documents DB " as DBDocuments <<Container>>
 
             component "Object Storage\n(MinIO / S3 Compatible)" as FileStore <<Container>>
 
