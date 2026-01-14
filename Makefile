@@ -1,5 +1,5 @@
 PLANTUML ?= plantuml
-SRC_DIR  ?= .
+SRC_DIR  ?= uml
 OUT_DIR  ?= out
 FORMATS  ?= png
 
