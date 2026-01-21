@@ -1,133 +1,106 @@
 @startuml
+!define RECTANGLE class
 skinparam linetype ortho
-skinparam node {
-    BackgroundColor White
-    BorderColor Black
+skinparam shadowing false
+skinparam nodesep 80
+skinparam ranksep 80
+
+' Styles
+skinparam component {
+    BackgroundColor<<Microservice>> #E3F2FD
+    BorderColor<<Microservice>> #1976D2
+    BackgroundColor<<Infrastructure>> #F5F5F5
+    BackgroundColor<<Security>> #FFEBEE
 }
-skinparam componentStyle uml2
 
-' =========================
-' CLIENT
-' =========================
+' ==========================================
+' ZONE CLIENTS
+' ==========================================
+node "Client Tier" #GhostWhite {
+    component "Desktop / Web / Mobile" as Clients
+}
 
-node "Client Workstation\n(Health Professional PC/Mac)" as ClientNode <<Device>> {
-    node "Operating System\n(Windows / macOS / Linux)" {
-        component [**Tauri Desktop Application**] as TauriApp <<Artifact>>
-        note right of TauriApp
-          - UI (React / Vue)
-          - Local encrypted storage (SQLite)
-          - Offline-first sync manager
-        end note
+' ==========================================
+' EDGE & OBSERVABILITY
+' ==========================================
+package "Edge & Governance" {
+    component "Nginx / Traefik" as Proxy <<Infrastructure>>
+    component "API Gateway\n(Auth Validation)" as Gateway <<Infrastructure>> #Gold
+    component "Monitoring Stack\n(Loki/Prometheus/Jaeger)" as Ops <<Infrastructure>> #LightGreen
+}
+
+' ==========================================
+' MESSAGERIE
+' ==========================================
+queue "Message Broker\n(RabbitMQ / Kafka)" as Broker #LightYellow
+
+' ==========================================
+' BUSINESS SERVICES
+' ==========================================
+package "Business Services" {
+    
+    node "Identity MS" {
+        component "Auth Service" as MS_Auth <<Microservice>>
+        database "Identity DB" as DB_Auth
+    }
+
+    node "Medical MS" {
+        component "Clinical Core" as MS_Med <<Microservice>>
+        database "Medical DB" as DB_Med
+    }
+
+    node "Workspace MS" {
+        component "Workspace Mgr" as MS_Work <<Microservice>>
+        database "Workspace DB" as DB_Work
+    }
+
+    node "Storage MS" {
+        component "Doc Service" as MS_Doc <<Microservice>>
+        database "Doc Metadata" as DB_Doc
+    }
+
+    node "Audit MS" {
+        component "Audit Logger" as MS_Audit <<Microservice>>
+        database "Audit DB" as DB_Audit
     }
 }
 
-cloud "Internet" as Internet
-
-' =========================
-' SERVER INFRASTRUCTURE
-' =========================
-
-node "Production Infrastructure\n(VPS / Dedicated Server)" as ServerNode <<Server>> {
-
-    node "Docker Host" <<Execution Environment>> {
-
-        ' -------- DMZ --------
-        package "Public Network (DMZ)" {
-            component [**Reverse Proxy**\n(Nginx / Traefik)] as Proxy <<Container>>
-            note right of Proxy
-              - TLS termination
-              - Load balancing
-              - Security headers
-            end note
-        }
-
-        ' -------- PRIVATE NETWORK --------
-        package "Internal Network (Private)" {
-
-            ' Entry point
-            component [**API Gateway**\n(ElysiaJS)] as Gateway <<Container>>
-            note left of Gateway
-              Clean Architecture Entry Point
-              - Authentication (JWT validation)
-              - Authorization delegation
-              - Request routing & aggregation
-            end note
-
-            ' Microservices
-            frame "Microservices Cluster" {
-
-                component [**Identity & Authorization Service**] as SvcAuth <<Microservice>>
-                note right of SvcAuth
-                  - Identity management
-                  - RBAC (Roles / Permissions)
-                  - ABAC (Policy evaluation)
-                  - Network & membership context
-                  - Centralized security audit
-                end note
-
-                component [**Medical Core Service**] as SvcMed <<Microservice>>
-                note right of SvcMed
-                  - Patients
-                  - Visits & Rounds
-                  - Prescriptions & Acts
-                end note
-
-                component [**Document Service**] as SvcDoc <<Microservice>>
-                note right of SvcDoc
-                  - Medical documents
-                  - Secure upload / retrieval
-                end note
-            }
-
-            ' Infrastructure services
-            component [**Relational Database**\n(PostgreSQL)] as DBServer <<Container>>
-            note right of DBServer
-              Logical schema separation:
-              - identity_schema
-              - authorization_schema
-              - medical_schema
-            end note
-
-            component [**Object Storage**\n(MinIO / S3 Compatible)] as FileStore <<Container>>
-        }
-    }
-
-    ' -------- PERSISTENCE --------
-    folder "Persistent Volumes" as Volumes {
-        file "pg_data" as VolDB
-        file "object_storage" as VolDocs
-    }
+' ==========================================
+' EXTERNAL & PERSISTENCE
+' ==========================================
+cloud "External Services" {
+    [S3 / MinIO Storage] as S3
+    [Health APIs (DMP/INS)] as MedAPI
 }
 
-' =========================
-' EXTERNAL SERVICES
-' =========================
+' ==========================================
+' FLUX DE COMMUNICATION
+' ==========================================
 
-cloud "External Services" as External {
-    component [SMTP Provider] as SMTP
-    component [Health APIs\n(DMP / INS)] as MedAPI
-}
+' Entrée et Auth
+Clients --> Proxy : HTTPS (JWT)
+Proxy --> Gateway
+Gateway .right.> MS_Auth : 1. Validate Token
+Gateway --> MS_Med : 2. Authorized Request
 
-' =========================
-' CONNECTIONS
-' =========================
+' Communication Asynchrone (Event-Driven)
+MS_Auth -[#blue]down-> Broker : "UserCreated"
+MS_Med -[#blue]down-> Broker : "MedicalEvent"
+MS_Doc -[#blue]down-> Broker : "FileUploaded"
 
-TauriApp --> Internet : HTTPS / WSS
-Internet --> Proxy : 443 / TLS
-Proxy --> Gateway : HTTP (internal network)
+Broker -[#red]up-> MS_Work : Consume
+Broker -[#red]up-> MS_Audit : Consume
 
-Gateway --> SvcAuth : HTTP / gRPC
-Gateway --> SvcMed : HTTP / gRPC
-Gateway --> SvcDoc : HTTP / gRPC
+' Gestion des fichiers (Optimisée)
+MS_Doc -- S3 : Generate Presigned URL
+Clients <--> S3 : Direct Upload/Download
 
-SvcAuth ..> DBServer : R/W (identity & auth)
-SvcMed ..> DBServer : R/W (medical)
-SvcDoc ..> FileStore : S3 API
+' Observabilité (Télémétrie)
+MS_Auth -- Ops
+MS_Med -- Ops
+MS_Doc -- Ops
 
-DBServer ..> VolDB
-FileStore ..> VolDocs
-
-Gateway ..> SMTP : Async notifications
-SvcMed ..> MedAPI : Secure outbound API
+' Dépendances
+MS_Med --> MedAPI
 
 @enduml
