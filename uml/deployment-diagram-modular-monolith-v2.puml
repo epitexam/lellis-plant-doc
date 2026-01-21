@@ -1,0 +1,178 @@
+@startuml
+skinparam linetype ortho
+skinparam componentStyle uml2
+skinparam node {
+    BackgroundColor White
+    BorderColor Black
+}
+
+' =========================
+' CLIENTS
+' =========================
+
+node "Client Devices" {
+    component "Tauri Desktop App" as Desktop <<Artifact>>
+    component "Web App" as WebClient <<Artifact>>
+    component "Mobile App" as MobileClient <<Artifact>>
+
+    note right of Desktop
+      - React / Vue
+      - Local encrypted SQLite
+      - Offline-first sync
+    end note
+
+    note right of WebClient
+      - SPA / SSR
+      - HTTPS access
+    end note
+
+    note right of MobileClient
+      - React Native / Flutter
+      - Offline caching
+    end note
+}
+
+cloud "Internet" as Internet
+
+' =========================
+' SERVER INFRASTRUCTURE
+' =========================
+
+node "Self-Hosted Server\n(VPS / On-Premise)" as ServerNode <<Server>> {
+
+    node "Docker Host" <<Execution Environment>> {
+
+        ' DMZ
+        package "Public Network (DMZ)" {
+            component "Reverse Proxy\n(Nginx / Traefik)" as Proxy <<Container>>
+            note right of Proxy
+              - TLS termination
+              - Security headers
+              - Optional rate limiting
+            end note
+        }
+
+        ' Internal Network
+        package "Private Network" {
+
+            node "Backend API\n(Modular Monolith)" as Backend <<Container>> {
+
+                ' ----------------------------
+                ' MODULES INTERNES
+                ' ----------------------------
+                package "Modules" {
+
+                    component "Identity" as ModIdentity
+                    component "Security / RBAC" as ModSecurity
+                    component "Workspace" as ModWorkspace
+                    component "Medical Core" as ModMedical
+                    component "Documents" as ModDocuments
+                    component "Audit & Notifications" as ModAudit
+                }
+
+                note right of ModIdentity
+                  - Manage users, sessions
+                  - Emit IdentityCreated events
+                end note
+
+                note right of ModSecurity
+                  - Role / Permission evaluation
+                  - Centralized access control
+                end note
+
+                note right of ModWorkspace
+                  - Workspace membership
+                  - Role assignment
+                  - Listen IdentityCreated events
+                end note
+
+                note right of ModMedical
+                  - Patients, Visits, Rounds
+                  - Prescriptions & CareSeries
+                  - Emits MedicalCore Event events
+                end note
+
+                note right of ModDocuments
+                  - Store & retrieve medical files
+                  - Upload triggers DocumentUploaded events
+                end note
+
+                note right of ModAudit
+                  - Logs all sensitive actions
+                  - Receives domain events to persist audit trails
+                end note
+
+                ' ----------------------------
+                ' COMMUNICATION INTERNE
+                ' ----------------------------
+                ModIdentity --> ModWorkspace : IdentityCreated event
+                ModMedical --> ModAudit : MedicalCore Event event
+                ModDocuments --> ModMedical : DocumentUploaded event
+                ModWorkspace --> ModSecurity : permission checks
+                ModMedical --> ModSecurity : permission checks
+                ModDocuments --> ModSecurity : permission checks
+            }
+
+            ' ----------------------------
+            ' DATABASES (one per module)
+            ' ----------------------------
+            database "Identity DB " as DBIdentity <<Container>>
+            database "Workspace DB " as DBWorkspace <<Container>>
+            database "Medical DB " as DBMedical <<Container>>
+            database "Audit DB " as DBAudit <<Container>>
+            database "Documents DB " as DBDocuments <<Container>>
+
+            component "Object Storage\n(MinIO / S3 Compatible)" as FileStore <<Container>>
+        }
+    }
+
+    ' -------- PERSISTENCE --------
+    folder "Persistent Volumes" as Volumes {
+        file "identity_pg_data" as VolDBIdentity
+        file "workspace_pg_data" as VolDBWorkspace
+        file "medical_pg_data" as VolDBMedical
+        file "audit_pg_data" as VolDBAudit
+        file "documents_pg_data" as VolDBDocuments
+        file "object_storage" as VolDocs
+    }
+}
+
+' =========================
+' EXTERNAL SERVICES
+' =========================
+
+cloud "External Services" as External {
+    component "SMTP Provider" as SMTP
+    component "Health APIs\n(DMP / INS)" as MedAPI
+}
+
+' =========================
+' CONNECTIONS
+' =========================
+
+Desktop --> Internet : HTTPS
+WebClient --> Internet : HTTPS
+MobileClient --> Internet : HTTPS
+Internet --> Proxy : 443 / TLS
+Proxy --> Backend : HTTP
+
+' Backend → Databases
+ModIdentity --> DBIdentity : SQL
+ModWorkspace --> DBWorkspace : SQL
+ModMedical --> DBMedical : SQL
+ModAudit --> DBAudit : SQL
+ModDocuments --> DBDocuments : SQL
+
+Backend --> FileStore : S3 API
+Backend --> SMTP : Async notifications
+Backend --> MedAPI : Secure outbound API
+
+' Persistence
+DBIdentity ..> VolDBIdentity
+DBWorkspace ..> VolDBWorkspace
+DBMedical ..> VolDBMedical
+DBAudit ..> VolDBAudit
+DBDocuments ..> VolDBDocuments
+FileStore ..> VolDocs
+
+@enduml
