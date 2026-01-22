@@ -146,6 +146,8 @@ Planned extensions include:
 
 This phase will **not break existing domain contracts** and will remain strictly isolated within the security module.
 
+![Security Core – Phase 2](docs/security-core-v2.png)
+
 ---
 
 ## Architecture Overview
