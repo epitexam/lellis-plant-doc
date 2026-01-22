@@ -6,9 +6,9 @@ skinparam nodesep 60
 skinparam ranksep 60
 
 ' =========================
-' SECURITY CORE – PHASE 1
+' SECURITY CORE + ABAC – PHASE 2
 ' =========================
-package "Security Core (RBAC)" #F9F9F9 {
+package "Security Core (RBAC + ABAC)" #F9F9F9 {
 
     class Role <<Aggregate>> {
         +id: RoleId
@@ -33,9 +33,47 @@ package "Security Core (RBAC)" #F9F9F9 {
     Role "1" *-- "0..*" Permission : grants >
 }
 
-' =========================
-' IDENTITY MANAGEMENT
-' =========================
+package "Authorization" #FFF3D6 {
+
+    class AuthorizationService <<Domain Service>> {
+        +can(userId: UserId, permission: PermissionCode, context?: AuthorizationContext): boolean
+    }
+
+    class AuthorizationContext <<ValueObject>> {
+        +workspaceId?: WorkspaceId
+        +resourceType?: string
+        +resourceId?: string
+        +requestedAt: DateTime
+        +attributes: Map<string, any>
+    }
+
+    class Policy <<Aggregate>> {
+        +id: PolicyId
+        +name: string
+        --
+        +evaluate(context: AuthorizationContext): boolean
+    }
+
+    class Rule <<Entity>> {
+        +id: RuleId
+        +effect: Allow | Deny
+        --
+        +evaluate(context: AuthorizationContext): boolean
+    }
+
+    class Condition <<ValueObject>> {
+        +type: string
+        +parameters: Map<string, any>
+        --
+        +matches(context: AuthorizationContext): boolean
+    }
+
+    Policy "1" *-- "1..*" Rule
+    Rule "1" *-- "1..*" Condition
+    AuthorizationService ..> Policy
+    AuthorizationService ..> Role
+}
+
 package "Identity Management" #EEE {
 
     class User <<Aggregate>> {
@@ -44,31 +82,30 @@ package "Identity Management" #EEE {
         +status: UserStatus
         --
         +isActive(): boolean
+        +assignGlobalRole(role: Role): void
+        +revokeGlobalRole(roleId: RoleId): void
+        +listGlobalRoles(): Role[]
     }
 
     class UserGlobalRole <<Aggregate>> {
         +id: UserGlobalRoleId
-        +userId: UserId
-        +roleId: RoleId
         +assignedAt: DateTime
+        --
+        +roleId: RoleId
     }
 
-        class Session <<Entity>> {
+    class Session <<Entity>> {
         +id: SessionId
         +token: string
         +deviceInfo: string
         +expiresAt: DateTime
     }
-    
-    User "1" *-- "0..*" Session
 
     User "1" *-- "0..*" UserGlobalRole
-    UserGlobalRole "1" --> "1" Role : references
+    UserGlobalRole "1" --> "1" Role
+    User "1" *-- "0..*" Session
 }
 
-' =========================
-' WORKSPACE MANAGEMENT
-' =========================
 package "Workspace Management" #E6F3FF {
 
     class Workspace <<Aggregate>> {
@@ -87,7 +124,7 @@ package "Workspace Management" #E6F3FF {
         --
         +assignRole(role: Role): void
         +revokeRole(roleId: RoleId): void
-        +hasAccess(permission: PermissionCode): boolean
+        +hasAccess(permission: PermissionCode, context?: AuthorizationContext): boolean
         +listRoles(): Role[]
     }
 
@@ -96,9 +133,6 @@ package "Workspace Management" #E6F3FF {
     WorkspaceMember "1" o-- "0..*" Role : assigned (WORKSPACE)
 }
 
-' =========================
-' DOMAIN EVENTS
-' =========================
 package "Events" #F2F2F2 {
 
     class DomainEvent <<Event>> {
@@ -109,16 +143,17 @@ package "Events" #F2F2F2 {
     class RoleRevoked <<Event>>
     class UserGlobalRoleAssigned <<Event>>
     class WorkspaceMemberCreated <<Event>>
+    class PolicyCreated <<Event>>
+    class RuleEvaluated <<Event>>
 
     DomainEvent <|-- RoleAssigned
     DomainEvent <|-- RoleRevoked
     DomainEvent <|-- UserGlobalRoleAssigned
     DomainEvent <|-- WorkspaceMemberCreated
+    DomainEvent <|-- PolicyCreated
+    DomainEvent <|-- RuleEvaluated
 }
 
-' =========================
-' AUDIT & NOTIFICATION
-' =========================
 package "Audit & Notification" #D4F0D4 {
 
     class AuditLog <<Entity>> {
